@@ -76,19 +76,33 @@ inline double sec(double nano){
   return nano / 1000000000.0;
 }
 
+void min_func(void *a, void *b, int *len, MPI_Datatype *dptr){
+  double *in = (double*)a;
+  double *inout = (double*)b;
+  if(*in > 0)
+    *inout = *in < *inout ? *in : *inout;
+}
+
+void max_func(void *a, void *b, int *len, MPI_Datatype *dptr){
+  double *in = (double*)a;
+  double *inout = (double*)b;
+  if(*in > 0)
+    *inout = *in > *inout ? *in : *inout;
+}
+
+void sum_func(void *a, void *b, int *len, MPI_Datatype *dptr){
+  double *in = (double*)a;
+  double *inout = (double*)b;
+  if(*in > 0)
+    *inout += *in;
+}
+
 void tprint(){
+  auto begin = std::chrono::steady_clock::now();
+
   int rank, size;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-  int length=-1;
-  if (rank == 0) {
-    for (auto t: timers) {
-      int l = t.first.length();
-      length = l > length ? l : length;
-    }
-    printf("| %*s | %8s | %8s | %8s |\n", length, "name", "min(s)", "max(s)", "avg(s)");
-  }
 
   // get timers not present in rank 0
   if (rank == 0){
@@ -103,8 +117,8 @@ void tprint(){
         MPI_Recv(name, sizes[i], MPI_CHAR, r, 44, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         entry e;
-        e.total = -1;
-        timers.try_emplace(std::string(name), e); 
+        e.total = -2000000;
+        timers.try_emplace(std::string(name), e);
       }
       delete [] name;
       delete [] sizes;
@@ -148,21 +162,36 @@ void tprint(){
       MPI_Bcast((char*)name, length, MPI_CHAR, 0, MPI_COMM_WORLD);
     }
   }else{
-      int n;
-      MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
-      int *sizes = new int[n];
-      MPI_Bcast(sizes, n, MPI_INT, 0, MPI_COMM_WORLD);
-      int max_length = *std::max_element(sizes, sizes+n);
-      char *name = new char[max_length];
-      for (int i=0; i<n; ++i){
-        MPI_Bcast(name, sizes[i], MPI_CHAR, 0, MPI_COMM_WORLD);
+    int n;
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    int *sizes = new int[n];
+    MPI_Bcast(sizes, n, MPI_INT, 0, MPI_COMM_WORLD);
+    int max_length = *std::max_element(sizes, sizes+n);
+    char *name = new char[max_length];
+    for (int i=0; i<n; ++i){
+      MPI_Bcast(name, sizes[i], MPI_CHAR, 0, MPI_COMM_WORLD);
 
-        entry e;
-        e.total = -1;
-        timers.try_emplace(std::string(name), e); 
-      }
-      delete [] name;
-      delete [] sizes;
+      entry e;
+      e.total = -3000000;
+      timers.try_emplace(std::string(name), e);
+    }
+    delete [] name;
+    delete [] sizes;
+  }
+
+  MPI_Op min_op, max_op, sum_op;
+  MPI_Op_create(min_func, 1, &min_op);
+  MPI_Op_create(max_func, 1, &max_op);
+  MPI_Op_create(sum_func, 1, &sum_op);
+
+  int length=-1;
+  if (rank == 0) {
+    // find max timer name length
+    for (auto t: timers) {
+      int l = t.first.length();
+      length = l > length ? l : length;
+    }
+    printf("| %*s | %10s | %10s | %10s |\n", length, "name", "min(s)", "max(s)", "avg(s)");
   }
 
   for (auto t: timers) {
@@ -170,12 +199,20 @@ void tprint(){
 
     double total = sec(t.second.total);
     double min,max,avg;
-    MPI_Reduce(&total, &min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&total, &max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&total, &avg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total, &min, 1, MPI_DOUBLE, min_op, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total, &max, 1, MPI_DOUBLE, max_op, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&total, &avg, 1, MPI_DOUBLE, sum_op, 0, MPI_COMM_WORLD);
     avg /= (double)size;
     if (rank == 0) {
-      printf("| %*s | %8lf | %8lf | %8lf |\n", length, name.c_str(), min, max, avg);
+      printf("| %*s | %10lf | %10lf | %10lf |\n", length, name.c_str(), min, max, avg);
     }
+  }
+
+  if (rank == 0) {
+    auto now = std::chrono::steady_clock::now();
+    auto diff = now - begin;
+    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(diff).count();
+    double duration_sec = sec(duration_ns);
+    printf("Time to gather and print: %lfs\n", duration_sec);
   }
 }

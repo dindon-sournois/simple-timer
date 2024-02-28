@@ -1,48 +1,35 @@
-#CUDA_ROOT=$(dirname $(which nvcc))/..
-#CUDA_INC=-I$(CUDA_ROOT)/include
-#CUDA_LIB=-L$(CUDA_ROOT)/lib64/stubs -lcuda
-CUDA=-gpu=cc80,cuda12.2 -cuda -lnvToolsExt
-ROCM=-L${ROCM_PATH}/lib -lroctx64 -lroctracer64 -I${ROCM_PATH}/include
+all:
 
-all: 
-
-fortran: c
-	mpif90 -g -O3 -fpic -Wall simple_timer.f90 -shared -o libsimple_timer_f.so
-
-cuda-fortran: cuda-c
-	mpif90 -g -O3 -fpic -Wall simple_timer.f90 -shared -o libsimple_timer_f.so $(CUDA)
-
-rocm-fortran: rocm-c
-	mpif90 -g -O3 -fpic -Wall simple_timer.f90 -shared -o libsimple_timer_f.so $(ROCM)
-
-fortran-test: fortran
-	mpif90 -g -O3 -Wall main.f90 -L. -lsimple_timer_f -lsimple_timer -o main_f90
-
-cuda-fortran-test: cuda-fortran
-	mpif90 -g -O3 -Wall main.f90 -L. -lsimple_timer_f -lsimple_timer -o main_f90 $(CUDA)
-
-rocm-fortran-test: rocm-fortran
-	mpif90 -g -O3 -Wall main.f90 -L. -lsimple_timer_f -lsimple_timer -o main_f90 $(ROCM)
+rocm:
+	$(eval ROCM=-L${ROCM_PATH}/lib -lroctx64 -lroctracer64 -I${ROCM_PATH}/include)
+cuda:
+	$(eval CUDA=-gpu=cc80,cuda12.2 -cuda -lnvToolsExt)
 
 c:
-	mpic++ -g -O3 -fpic -std=c++17 -Wall simple_timer.cpp -shared -o libsimple_timer.so
+	mpic++ -g -O3 -fpic -std=c++17 -Wall simple_timer.cpp -shared $(CUDA) $(ROCM) -c
+	mpic++ -g -O3 -fpic -std=c++17 -Wall simple_timer.cpp -shared -o libsimple_timer.so $(CUDA) $(ROCM)
+fortran: c
+	mpif90 -g -O3 -fpic -Wall simple_timer.f90 -shared $(CUDA) $(ROCM) -c -o simple_timer_f.o
+	mpif90 -g -O3 -fpic -Wall simple_timer.f90 -shared -o libsimple_timer_f.so $(CUDA) $(ROCM)
 
-cuda-c:
-	mpic++ -g -O3 -fpic -std=c++17 -Wall simple_timer.cpp -shared -o libsimple_timer.so $(CUDA)
-
-rocm-c:
-	mpic++ -g -O3 -fpic -std=c++17 -Wall simple_timer.cpp -shared -o libsimple_timer.so $(ROCM)
+cuda-c: cuda c
+rocm-c: rocm c
+cuda-fortran: cuda fortran
+rocm-fortran: rocm fortran
 
 c-test: c
-	mpicc -g -O3 -Wall main.c -L. -lsimple_timer -o main_c
+	mpicc -g -O3 -Wall main.c -L. -lsimple_timer -o main_c $(CUDA) $(ROCM)
+fortran-test: fortran
+	mpif90 -g -O3 -Wall main.f90 -L. -lsimple_timer_f -lsimple_timer -o main_f90 $(CUDA) $(ROCM)
 
-cuda-c-test: cuda-c
-	mpicc -g -O3 -Wall main.c -L. -lsimple_timer -o main_c $(CUDA)
-
-rocm-c-test: rocm-c
-	mpicc -g -O3 -Wall main.c -L. -lsimple_timer -o main_c $(ROCM)
+cuda-fortran-test: cuda-fortran fortran-test
+rocm-fortran-test: rocm-fortran fortran-test
+cuda-c-test: cuda-c c-test
+rocm-c-test: rocm-c c-test
 
 test: c-test fortran-test 
+	mpirun -n 2 ./main_c
+	mpirun -n 2 ./main_f90
 test-cuda: cuda-c-test cuda-fortran-test 
 test-rocm: rocm-c-test rocm-fortran-test
 
