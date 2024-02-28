@@ -49,3 +49,7 @@ target_link_libraries(test_f simple_timer simple_timer_f MPI::MPI_Fortran
   roctx64 roctracer64
   >
 )
+
+enable_testing()
+add_test(NAME test_c COMMAND mpiexec -np 4 --oversubscribe $<TARGET_FILE:test_c>)
+add_test(NAME test_f COMMAND mpiexec -np 4 --oversubscribe $<TARGET_FILE:test_f>)
