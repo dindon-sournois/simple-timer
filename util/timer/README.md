@@ -1,8 +1,7 @@
 # Simple timer
 
 Require MPI.  
-Should optionally detect CUDA or HIP (ROCm) automatically for nvtx / roctx
-support.
+Should automatically detect CUDA or HIP (ROCm) for optional nvtx / roctx support.
 
 ## Compiling
 
