@@ -8,7 +8,7 @@ support.
 
 ```bash
 cmake -B build .
-cmake --build build
+cmake --build build -j
 ctest -V --test-dir build
 ```
 

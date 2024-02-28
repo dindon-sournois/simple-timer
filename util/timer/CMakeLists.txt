@@ -9,6 +9,8 @@ find_package(CUDAToolkit)
 if(DEFINED ENV{HIP_PATH})
   set(CMAKE_MODULE_PATH $ENV{HIP_PATH}/hip/cmake $ENV{HIP_PATH}/cmake)
   find_package(hip)
+else()
+  message("-- Could NOT find hip with HIP_PATH.")
 endif()
 
 add_library(options_flags INTERFACE)
