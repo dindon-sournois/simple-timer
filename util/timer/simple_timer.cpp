@@ -6,7 +6,8 @@
 
 #ifdef CUDA
 #include <nvtx3/nvToolsExt.h>
-#elif HIP
+#endif
+#ifdef ROCM
 #include <roctracer/roctx.h>
 #endif
 
@@ -50,7 +51,8 @@ void tstart(const char* name){
   if(new_entry) {
 #ifdef CUDA
     timers[s].color = (color_counter++)%num_colors;
-#else
+#endif
+#ifdef ROCM
     // TODO: roctx colors?
 #endif
   } else {
@@ -66,7 +68,8 @@ void tstart(const char* name){
   eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;
   eventAttrib.message.ascii = name;
   nvtxRangePushEx(&eventAttrib);
-#elif HIP
+#endif
+#ifdef ROCM
   // TODO: any roctx colors?
   roctxRangePush(name);
 #endif
@@ -79,7 +82,8 @@ void tstop(const char* name){
   timers[name].total += duration;
 #ifdef CUDA
   nvtxRangePop();
-#elif HIP
+#endif
+#ifdef ROCM
   roctxRangePop();
 #endif
 }
