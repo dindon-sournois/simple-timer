@@ -1,4 +1,5 @@
 #include <mpi.h>
+#include <cstdlib>
 #include <iostream>
 #include <chrono>
 #include <map>
@@ -18,6 +19,7 @@ typedef struct {
   std::chrono::steady_clock::time_point begin;
   int color;
   double total;
+  bool first;
 } timer_entry;
 
 std::map<std::string, timer_entry> timers;
@@ -42,11 +44,27 @@ const int num_colors = sizeof(colors)/sizeof(uint32_t);
 int color_counter = 0;
 #endif
 
+bool skip_first = false;
+
+void tinit(){
+  if (const char* skipe = std::getenv("SIMPLE_TIMER_SKIP_FIRST")){
+    std::string skip(skipe);
+    if (skip == "1" || skip == "true" || skip == "yes" || skip == "y"){
+      skip_first = true;
+    }
+  }
+}
+
 void tstart(const char* name){
+  static bool first = true;
+  if (first)
+    tinit();
+  first = false;
+
   std::string s = std::string(name);
   auto now = std::chrono::steady_clock::now();
   // init total to 0 at first insertion
-  auto ret = timers.try_emplace(s,timer_entry{now,0,0.0});
+  auto ret = timers.try_emplace(s,timer_entry{now,0,0.0,true});
   bool new_entry = ret.second;
   if(new_entry) {
 #ifdef CUDA
@@ -79,7 +97,13 @@ void tstop(const char* name){
   auto now = std::chrono::steady_clock::now();
   auto diff = now - timers[name].begin;
   double duration = std::chrono::duration_cast<std::chrono::nanoseconds>(diff).count();
-  timers[name].total += duration;
+
+  if (timers[name].first && skip_first){
+    timers[name].first = false;
+  }else{
+    timers[name].total += duration;
+  }
+
 #ifdef CUDA
   nvtxRangePop();
 #endif
