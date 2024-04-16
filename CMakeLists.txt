@@ -56,3 +56,7 @@ enable_testing()
 add_test(NAME test-c COMMAND mpiexec -np 4 --oversubscribe $<TARGET_FILE:test_c>)
 add_test(NAME test-fortran COMMAND mpiexec -np 4 --oversubscribe $<TARGET_FILE:test_f>)
 add_test(NAME test-1-rank COMMAND mpiexec -np 1 $<TARGET_FILE:test_c>)
+
+set_target_properties(simple_timer PROPERTIES PUBLIC_HEADER "simple_timer.h")
+set_target_properties(simple_timer_f PROPERTIES PUBLIC_HEADER "${CMAKE_BINARY_DIR}/simple_timer.mod")
+install(TARGETS simple_timer simple_timer_f)
